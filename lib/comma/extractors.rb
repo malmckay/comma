@@ -19,9 +19,33 @@ module Comma
   end
 
   class HeaderExtractor < Extractor
-    
     def method_missing(sym, *args, &block)
+      field, extractor_type, extractor_param = sym.to_s.split('__')
+
+      case extractor_type
+      when 'foreach' then foreach_extractor(extractor_param, *args, &block)
+      when 'static'  then static_extractor(sym, *args, &block)
+      else single_field_extractor(sym, *args, &block)
+      end
+    end
+
+    def foreach_extractor(sym, *args, &block)
+      collection = @instance.send(sym)
+      @results   += collection.flat_map do |item|
+        args.flat_map do |arg|
+          case arg
+          when Hash
+            arg.map do |k, v|
+              item.send(k)
+            end
+          end
+        end
+      end
+    end
+
+    def single_field_extractor(sym, *args, &block)
       @results << sym.to_s.humanize if args.blank?
+
       args.each do |arg|
         case arg
         when Hash
@@ -40,8 +64,34 @@ module Comma
   end
 
   class DataExtractor < Extractor
-
     def method_missing(sym, *args, &block)
+      field, extractor_type, extractor_param = sym.to_s.split('__')
+
+      case extractor_type
+      when 'foreach' then foreach_extractor(extractor_param, *args, &block)
+      when 'static'  then static_extractor(sym, *args, &block)
+      else single_field_extractor(sym, *args, &block)
+      end
+    end
+
+    def foreach_extractor(sym, *args, &block)
+      collection = @instance.send(sym)
+      @results   += collection.flat_map do |item|
+        args.flat_map do |arg|
+          case arg
+          when Hash
+            arg.map do |k, v|
+              item.send(v)
+            end
+          end
+        end
+      end
+    end
+
+
+    def single_field_extractor(sym, *args, &block)
+      args = args.flatten if args.respond_to?(:flatten)
+      args = args.compact
       if args.blank?
         result = block ? yield(@instance.send(sym)) : @instance.send(sym)
         @results << result.to_s
